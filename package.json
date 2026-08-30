@@ -1,10 +1,14 @@
 {
   "name": "liberty-city-radio-relay-v5",
-  "version": "5.0.0",
-  "description": "Online Liberty City FD radio/dispatch relay",
+  "version": "5.1.0",
+  "description": "Liberty City FD online radio relay with WebRTC push-to-talk voice",
   "main": "server.js",
-  "scripts": { "start": "node server.js" },
-  "engines": { "node": ">=20" },
+  "scripts": {
+    "start": "node server.js"
+  },
+  "engines": {
+    "node": ">=20"
+  },
   "dependencies": {
     "express": "^4.21.1",
     "socket.io": "^4.8.1"
