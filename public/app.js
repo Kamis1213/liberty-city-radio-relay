@@ -1,20 +1,28 @@
 const socket = io();
+
 const conn = document.getElementById("conn");
 const users = document.getElementById("users");
 const feed = document.getElementById("feed");
+const roster = document.getElementById("roster");
 const audioBtn = document.getElementById("audio");
 const micBtn = document.getElementById("mic");
 const micStatus = document.getElementById("micstatus");
 const rxStatus = document.getElementById("rxstatus");
 const ptt = document.getElementById("ptt");
+const emergencyBtn = document.getElementById("emergency");
 const unit = document.getElementById("unit");
+const channel = document.getElementById("channel");
+const channelDisplay = document.getElementById("channelDisplay");
 const alertBox = document.getElementById("alert");
+const emergencyAlert = document.getElementById("emergencyAlert");
 const remoteAudio = document.getElementById("remote-audio");
+const clock = document.getElementById("clock");
 
 let ctx = null;
 let audioOn = false;
 let localStream = null;
 let transmitting = false;
+let busy = false;
 const peers = new Map();
 
 const rtcConfig = {
@@ -22,17 +30,39 @@ const rtcConfig = {
 };
 
 unit.value = localStorage.getItem("lcfd_callsign") || "";
+channel.value = localStorage.getItem("lcfd_channel") || "Dispatch";
+channelDisplay.textContent = channel.value;
+
+setInterval(() => {
+  clock.textContent = new Date().toLocaleTimeString();
+}, 500);
+clock.textContent = new Date().toLocaleTimeString();
+
+function registration() {
+  return { unit: unit.value || "Unknown Unit", channel: channel.value };
+}
 
 socket.on("connect", () => {
   conn.textContent = "ONLINE";
-  socket.emit("register", { unit: unit.value || "Unknown Unit" });
+  socket.emit("register", registration());
 });
+
 socket.on("disconnect", () => conn.textContent = "OFFLINE");
 socket.on("user-count", n => users.textContent = `${n} USER${n === 1 ? "" : "S"}`);
 
 unit.addEventListener("change", () => {
   localStorage.setItem("lcfd_callsign", unit.value.trim());
-  socket.emit("register", { unit: unit.value || "Unknown Unit" });
+  socket.emit("register", registration());
+});
+
+channel.addEventListener("change", () => {
+  localStorage.setItem("lcfd_channel", channel.value);
+  channelDisplay.textContent = channel.value;
+  closeAllPeers();
+  rxStatus.textContent = "RADIO CLEAR";
+  busy = false;
+  socket.emit("register", registration());
+  channelChangeTone();
 });
 
 function esc(v){
@@ -40,43 +70,55 @@ function esc(v){
 }
 
 function addDispatch(d){
-  const div=document.createElement("div");
-  div.className="feeditem";
-  div.innerHTML=`<strong>${esc(d.priority)} — ${esc(d.incidentNumber)}</strong><br>${esc(d.callType)}<br>${esc(d.address)}<br>${esc(d.units)}<br><small>${esc(d.notes)}</small>`;
+  const div = document.createElement("div");
+  div.className = "feeditem";
+  div.innerHTML = `<strong>${esc(d.priority)} — ${esc(d.incidentNumber)}</strong><br>${esc(d.callType)}<br>${esc(d.address)}<br>${esc(d.units)}<br><small>${esc(d.notes)}</small>`;
   feed.prepend(div);
 }
 
-function tone(freq,start,dur,vol=.15){
+function tone(freq,start,dur,vol=.15,type="sine"){
   if(!audioOn || !ctx || ctx.state!=="running") return;
   const o=ctx.createOscillator(),g=ctx.createGain(),t=ctx.currentTime+start;
-  o.frequency.value=freq;o.type="sine";
+  o.frequency.value=freq;o.type=type;
   g.gain.setValueAtTime(.0001,t);
-  g.gain.exponentialRampToValueAtTime(vol,t+.02);
+  g.gain.exponentialRampToValueAtTime(vol,t+.015);
   g.gain.exponentialRampToValueAtTime(.0001,t+dur);
   o.connect(g);g.connect(ctx.destination);o.start(t);o.stop(t+dur+.03);
 }
+
 function alertTone(){
   tone(650,0,.7,.16);tone(950,0,.7,.12);
   tone(790,.82,.85,.16);tone(1090,.82,.85,.12);
 }
+function keyUpTone(){ tone(1180,0,.07,.08,"square"); }
+function keyDownTone(){ tone(780,0,.07,.07,"square"); }
+function channelChangeTone(){ tone(880,0,.06,.05,"square"); }
+function emergencyTone(){
+  for(let i=0;i<5;i++){
+    tone(1050,i*.34,.14,.12,"square");
+    tone(760,i*.34+.16,.14,.12,"square");
+  }
+}
 
 socket.on("recent", items => items.slice().reverse().forEach(addDispatch));
+
 socket.on("dispatch", d => {
   addDispatch(d);
-  alertBox.innerHTML=`<h2>${esc(d.priority)} — ${esc(d.incidentNumber)}</h2><strong>${esc(d.callType)}</strong><br>${esc(d.address)}<br>${esc(d.units)}<br><button id="ack">ACKNOWLEDGE</button>`;
+  alertBox.innerHTML = `<h2>${esc(d.priority)} — ${esc(d.incidentNumber)}</h2><strong>${esc(d.callType)}</strong><br>${esc(d.address)}<br>${esc(d.units)}<br><button id="ack">ACKNOWLEDGE</button>`;
   alertBox.classList.remove("hidden");
-  document.getElementById("ack").onclick=()=>alertBox.classList.add("hidden");
+  document.getElementById("ack").onclick = () => alertBox.classList.add("hidden");
   alertTone();
+
   if(audioOn && "speechSynthesis" in window){
-    setTimeout(()=>{
+    setTimeout(() => {
       speechSynthesis.cancel();
-      const u=new SpeechSynthesisUtterance(`${d.units}. Respond to ${d.callType}, at ${d.address}.`);
+      const u = new SpeechSynthesisUtterance(`${d.units}. Respond to ${d.callType}, at ${d.address}.`);
       u.rate=.92;u.pitch=.95;speechSynthesis.speak(u);
     },1900);
   }
 });
 
-audioBtn.onclick=async()=>{
+audioBtn.onclick = async () => {
   const A=window.AudioContext||window.webkitAudioContext;
   if(!ctx)ctx=new A();
   await ctx.resume();
@@ -109,6 +151,15 @@ async function enableMic(){
 }
 micBtn.onclick=enableMic;
 
+function closePeer(id){
+  peers.get(id)?.close();
+  peers.delete(id);
+  document.getElementById(`audio-${id}`)?.remove();
+}
+function closeAllPeers(){
+  for(const id of [...peers.keys()]) closePeer(id);
+}
+
 function makePeer(id){
   if(peers.has(id)) return peers.get(id);
   const pc=new RTCPeerConnection(rtcConfig);
@@ -136,10 +187,7 @@ function makePeer(id){
   };
 
   pc.onconnectionstatechange=()=>{
-    if(["failed","closed"].includes(pc.connectionState)){
-      pc.close();peers.delete(id);
-      document.getElementById(`audio-${id}`)?.remove();
-    }
+    if(["failed","closed"].includes(pc.connectionState)) closePeer(id);
   };
   return pc;
 }
@@ -153,18 +201,15 @@ async function makeOffer(id,pc=makePeer(id)){
 }
 
 socket.on("peer-list", async list=>{
-  // Existing clients initiate toward this newly connected client.
   for(const peer of list) await makeOffer(peer.id);
 });
 
-socket.on("peer-joined", peer=>{
-  // New peer will receive our ID in its peer-list and initiate.
+socket.on("peer-joined", peer => {
+  // Newly joined peer will negotiate using peer-list.
 });
 
-socket.on("peer-left", ({id})=>{
-  peers.get(id)?.close();peers.delete(id);
-  document.getElementById(`audio-${id}`)?.remove();
-});
+socket.on("peer-updated", () => {});
+socket.on("peer-left", ({id}) => closePeer(id));
 
 socket.on("webrtc-offer", async({from,sdp})=>{
   const pc=makePeer(from);
@@ -186,24 +231,54 @@ socket.on("webrtc-ice", async({from,candidate})=>{
   try{await pc.addIceCandidate(candidate);}catch(e){console.error(e);}
 });
 
-socket.on("ptt:start",({unit})=>{
-  rxStatus.textContent=`RECEIVING: ${unit}`;
+socket.on("ptt:start",({unit:txUnit,channel:txChannel})=>{
+  busy=true;
+  rxStatus.textContent=`RECEIVING: ${txUnit} · ${txChannel}`;
+  keyUpTone();
 });
 socket.on("ptt:stop",()=>{
+  busy=false;
   rxStatus.textContent="RADIO CLEAR";
+  keyDownTone();
+});
+
+socket.on("roster", list=>{
+  roster.innerHTML="";
+  const sorted=[...list].sort((a,b)=>a.channel.localeCompare(b.channel)||a.unit.localeCompare(b.unit));
+  for(const item of sorted){
+    const div=document.createElement("div");
+    div.className="roster-item";
+    div.innerHTML=`<strong>${esc(item.unit)}</strong><span class="roster-channel">${esc(item.channel)}</span>`;
+    roster.appendChild(div);
+  }
+});
+
+socket.on("emergency", data=>{
+  emergencyTone();
+  emergencyAlert.innerHTML=`<h2>EMERGENCY TRAFFIC</h2><div><strong>${esc(data.unit)}</strong></div><div>${esc(data.channel)}</div><button id="emergencyAck">ACKNOWLEDGE</button>`;
+  emergencyAlert.classList.remove("hidden");
+  document.getElementById("emergencyAck").onclick=()=>emergencyAlert.classList.add("hidden");
 });
 
 function startPTT(e){
   if(e)e.preventDefault();
   if(!localStream || transmitting)return;
+  if(busy){
+    rxStatus.textContent="CHANNEL BUSY";
+    tone(260,0,.16,.08,"square");
+    return;
+  }
+
   transmitting=true;
   localStream.getAudioTracks().forEach(t=>t.enabled=true);
   ptt.textContent="TRANSMITTING";
   ptt.classList.add("tx");
-  micStatus.textContent=`TRANSMITTING AS ${unit.value||"Unknown Unit"}`;
-  socket.emit("register",{unit:unit.value||"Unknown Unit"});
+  micStatus.textContent=`TX: ${unit.value||"Unknown Unit"} · ${channel.value}`;
+  socket.emit("register", registration());
   socket.emit("ptt:start");
+  keyUpTone();
 }
+
 function stopPTT(e){
   if(e)e.preventDefault();
   if(!localStream || !transmitting)return;
@@ -213,9 +288,15 @@ function stopPTT(e){
   ptt.classList.remove("tx");
   micStatus.textContent="MICROPHONE READY";
   socket.emit("ptt:stop");
+  keyDownTone();
 }
 
 ptt.addEventListener("pointerdown",startPTT);
 window.addEventListener("pointerup",stopPTT);
 ptt.addEventListener("pointercancel",stopPTT);
 ptt.addEventListener("contextmenu",e=>e.preventDefault());
+
+emergencyBtn.onclick=()=>{
+  const ok=confirm(`Send EMERGENCY alert for ${unit.value||"Unknown Unit"} on ${channel.value}?`);
+  if(ok) socket.emit("emergency");
+};

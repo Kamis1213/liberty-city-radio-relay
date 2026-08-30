@@ -8,34 +8,63 @@
 </head>
 <body>
   <header>
-    <h1>LIBERTY CITY FIRE RADIO</h1>
-    <div><span id="users">0 USERS</span> · <span id="conn">Connecting...</span></div>
+    <div>
+      <div class="eyebrow">LIBERTY CITY FIRE DEPARTMENT</div>
+      <h1>RADIO COMMUNICATIONS</h1>
+    </div>
+    <div class="header-status"><span id="users">0 USERS</span> · <span id="conn">Connecting...</span></div>
   </header>
 
   <main>
-    <section class="panel">
-      <h2>Radio Console</h2>
+    <section class="console panel">
+      <div class="console-head">
+        <div>
+          <div class="label">ACTIVE CHANNEL</div>
+          <div id="channelDisplay" class="channel-display">Dispatch</div>
+        </div>
+        <div id="clock" class="clock">--:--:--</div>
+      </div>
+
       <label>Unit / Callsign
         <input id="unit" placeholder="Engine 1" maxlength="60">
       </label>
 
-      <button id="audio">Enable Radio Audio</button>
-      <button id="mic">Enable Microphone</button>
+      <label>Radio Channel
+        <select id="channel">
+          <option>Dispatch</option>
+          <option>Fireground 1</option>
+          <option>Fireground 2</option>
+          <option>Command</option>
+        </select>
+      </label>
 
-      <div id="micstatus" class="status">MICROPHONE OFF</div>
-      <div id="rxstatus" class="status">RADIO CLEAR</div>
+      <div class="button-row">
+        <button id="audio">Enable Radio Audio</button>
+        <button id="mic">Enable Microphone</button>
+      </div>
+
+      <div class="status-grid">
+        <div id="micstatus" class="status">MICROPHONE OFF</div>
+        <div id="rxstatus" class="status">RADIO CLEAR</div>
+      </div>
 
       <button id="ptt" class="ptt" disabled>HOLD TO TALK</button>
-      <p class="note">Enable the microphone once, then hold PTT while speaking. Release PTT when finished.</p>
+      <button id="emergency" class="emergency">EMERGENCY</button>
+
+      <p class="note">Hold PTT while speaking and release when finished. Users only hear voice traffic on the same radio channel.</p>
     </section>
 
     <section class="panel">
+      <h2>Channel Roster</h2>
+      <div id="roster"></div>
+
       <h2>Dispatch Feed</h2>
       <div id="feed"></div>
     </section>
   </main>
 
   <div id="alert" class="alert hidden"></div>
+  <div id="emergencyAlert" class="emergency-alert hidden"></div>
   <div id="remote-audio"></div>
 
   <script src="/socket.io/socket.io.js"></script>

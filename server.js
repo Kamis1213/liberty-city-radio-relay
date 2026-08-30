@@ -15,8 +15,38 @@ const recent = [];
 const MAX_RECENT = 50;
 const clients = new Map();
 
+const VALID_CHANNELS = new Set(["Dispatch", "Fireground 1", "Fireground 2", "Command"]);
+
+function safeChannel(value) {
+  const v = String(value || "Dispatch");
+  return VALID_CHANNELS.has(v) ? v : "Dispatch";
+}
+
+function peerListFor(socketId) {
+  const me = clients.get(socketId);
+  if (!me) return [];
+  return [...clients.entries()]
+    .filter(([id, info]) => id !== socketId && info.channel === me.channel)
+    .map(([id, info]) => ({ id, unit: info.unit, channel: info.channel }));
+}
+
+function emitRoster() {
+  const roster = [...clients.entries()].map(([id, info]) => ({
+    id,
+    unit: info.unit,
+    channel: info.channel
+  }));
+  io.emit("roster", roster);
+  io.emit("user-count", clients.size);
+}
+
 app.get("/health", (req, res) => {
-  res.json({ ok: true, service: "Liberty City Radio Relay v5.1", voice: "WebRTC PTT" });
+  res.json({
+    ok: true,
+    service: "Liberty City Radio Relay v5.2",
+    voice: "WebRTC PTT",
+    channels: [...VALID_CHANNELS]
+  });
 });
 
 app.get("/api/recent", (req, res) => res.json(recent));
@@ -38,55 +68,112 @@ app.post("/dispatch", (req, res) => {
 
   recent.unshift(incident);
   if (recent.length > MAX_RECENT) recent.pop();
+
   io.emit("dispatch", incident);
   console.log(`[DISPATCH] ${incident.incidentNumber} ${incident.callType} @ ${incident.address}`);
   res.json({ ok: true, relayed: true });
 });
 
 io.on("connection", socket => {
-  clients.set(socket.id, { unit: "Unknown Unit" });
+  clients.set(socket.id, { unit: "Unknown Unit", channel: "Dispatch" });
 
   socket.emit("recent", recent.slice(0, 10));
-  socket.emit("peer-list", [...clients.entries()]
-    .filter(([id]) => id !== socket.id)
-    .map(([id, info]) => ({ id, unit: info.unit })));
+  socket.emit("peer-list", peerListFor(socket.id));
+  emitRoster();
 
   socket.on("register", data => {
-    const unit = String(data?.unit || "Unknown Unit").trim().slice(0, 60) || "Unknown Unit";
-    clients.set(socket.id, { unit });
-    socket.broadcast.emit("peer-joined", { id: socket.id, unit });
-    io.emit("user-count", clients.size);
+    const current = clients.get(socket.id) || {};
+    const unit = String(data?.unit || current.unit || "Unknown Unit").trim().slice(0, 60) || "Unknown Unit";
+    const channel = safeChannel(data?.channel || current.channel || "Dispatch");
+    const oldChannel = current.channel;
+
+    clients.set(socket.id, { unit, channel });
+
+    if (oldChannel !== channel) {
+      socket.broadcast.emit("peer-left", { id: socket.id });
+      socket.emit("peer-list", peerListFor(socket.id));
+
+      for (const [id, info] of clients) {
+        if (id !== socket.id && info.channel === channel) {
+          io.to(id).emit("peer-joined", { id: socket.id, unit, channel });
+        }
+      }
+    } else {
+      socket.broadcast.emit("peer-updated", { id: socket.id, unit, channel });
+    }
+
+    emitRoster();
   });
 
-  // WebRTC signaling only. Actual microphone audio travels browser-to-browser.
   socket.on("webrtc-offer", ({ target, sdp }) => {
-    if (clients.has(target)) io.to(target).emit("webrtc-offer", { from: socket.id, sdp });
+    const me = clients.get(socket.id), them = clients.get(target);
+    if (me && them && me.channel === them.channel) {
+      io.to(target).emit("webrtc-offer", { from: socket.id, sdp });
+    }
   });
+
   socket.on("webrtc-answer", ({ target, sdp }) => {
-    if (clients.has(target)) io.to(target).emit("webrtc-answer", { from: socket.id, sdp });
+    const me = clients.get(socket.id), them = clients.get(target);
+    if (me && them && me.channel === them.channel) {
+      io.to(target).emit("webrtc-answer", { from: socket.id, sdp });
+    }
   });
+
   socket.on("webrtc-ice", ({ target, candidate }) => {
-    if (clients.has(target)) io.to(target).emit("webrtc-ice", { from: socket.id, candidate });
+    const me = clients.get(socket.id), them = clients.get(target);
+    if (me && them && me.channel === them.channel) {
+      io.to(target).emit("webrtc-ice", { from: socket.id, candidate });
+    }
   });
 
   socket.on("ptt:start", () => {
-    const unit = clients.get(socket.id)?.unit || "Unknown Unit";
-    socket.broadcast.emit("ptt:start", { id: socket.id, unit, at: new Date().toISOString() });
+    const me = clients.get(socket.id);
+    if (!me) return;
+    for (const [id, info] of clients) {
+      if (id !== socket.id && info.channel === me.channel) {
+        io.to(id).emit("ptt:start", {
+          id: socket.id,
+          unit: me.unit,
+          channel: me.channel,
+          at: new Date().toISOString()
+        });
+      }
+    }
   });
+
   socket.on("ptt:stop", () => {
-    const unit = clients.get(socket.id)?.unit || "Unknown Unit";
-    socket.broadcast.emit("ptt:stop", { id: socket.id, unit, at: new Date().toISOString() });
+    const me = clients.get(socket.id);
+    if (!me) return;
+    for (const [id, info] of clients) {
+      if (id !== socket.id && info.channel === me.channel) {
+        io.to(id).emit("ptt:stop", {
+          id: socket.id,
+          unit: me.unit,
+          channel: me.channel,
+          at: new Date().toISOString()
+        });
+      }
+    }
+  });
+
+  socket.on("emergency", () => {
+    const me = clients.get(socket.id);
+    if (!me) return;
+    io.emit("emergency", {
+      id: socket.id,
+      unit: me.unit,
+      channel: me.channel,
+      at: new Date().toISOString()
+    });
   });
 
   socket.on("disconnect", () => {
     clients.delete(socket.id);
-    socket.broadcast.emit("peer-left", { id: socket.id });
-    io.emit("user-count", clients.size);
+    io.emit("peer-left", { id: socket.id });
+    emitRoster();
   });
-
-  io.emit("user-count", clients.size);
 });
 
 server.listen(PORT, "0.0.0.0", () => {
-  console.log(`Liberty City Radio Relay v5.1 listening on port ${PORT}`);
+  console.log(`Liberty City Radio Relay v5.2 listening on port ${PORT}`);
 });

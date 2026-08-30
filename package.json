@@ -1,7 +1,7 @@
 {
   "name": "liberty-city-radio-relay-v5",
-  "version": "5.1.0",
-  "description": "Liberty City FD online radio relay with WebRTC push-to-talk voice",
+  "version": "5.2.0",
+  "description": "Liberty City FD online fire radio console with WebRTC PTT, channels, emergency alerts and radio tones",
   "main": "server.js",
   "scripts": {
     "start": "node server.js"

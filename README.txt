@@ -1,31 +1,43 @@
-LIBERTY CITY RADIO RELAY v5.1
+LIBERTY CITY RADIO RELAY v5.2
 =============================
 
-NEW IN v5.1
-- Real browser microphone Push-To-Talk using WebRTC
-- Callsign registration
-- Connected-user count
-- Hold PTT to transmit; release to stop
-- Receiving indicator shows transmitting callsign
-- Existing CAD /dispatch endpoint remains unchanged
-- Existing dispatch feed, tones, and spoken dispatch remain
+NEW IN v5.2
+- Radio channels:
+  * Dispatch
+  * Fireground 1
+  * Fireground 2
+  * Command
+- Voice traffic is isolated by channel
+- Channel roster showing callsigns and their current channels
+- PTT key-up and key-down radio beeps
+- Channel-busy protection
+- Emergency button with system-wide emergency alert
+- Improved fire-radio console layout
+- Live connected-user count and clock
+- Callsign and selected channel are remembered in the browser
+
+KEPT FROM v5.1
+- Real WebRTC microphone Push-To-Talk
+- CAD /dispatch integration
+- Dispatch tones and spoken dispatch
+- Dispatch feed
+- HTTPS microphone support
 
 UPDATE YOUR EXISTING RENDER RADIO SERVICE
 1. Extract this ZIP.
-2. Upload the CONTENTS of liberty-city-radio-relay-v5.1 to the SAME GitHub
-   radio repository you already use.
-3. Commit changes.
+2. Upload the CONTENTS of liberty-city-radio-relay-v5.2 into the SAME GitHub radio repository.
+3. Replace the existing files and Commit changes.
 4. Render should redeploy automatically.
-5. Open the radio page.
-6. Enter a callsign.
-7. Click Enable Radio Audio.
-8. Click Enable Microphone and choose Allow when the browser asks.
-9. Test with TWO separate devices/browsers. Both must have the radio page open.
-10. On one device hold HOLD TO TALK and speak. The other should hear it.
+5. Refresh the radio page with Ctrl+F5.
+6. Enable Radio Audio and Enable Microphone on each client.
+7. Select matching channels to talk to each other.
+8. Test PTT.
+9. Try moving one client to a different channel; it should no longer hear the first.
+10. Test the EMERGENCY button.
 
-IMPORTANT
-- The site must be served over HTTPS for browser microphone access. Render HTTPS works.
-- For the easiest first test, use two separate devices to avoid echo.
-- WebRTC audio is peer-to-peer. The Render server handles signaling, not the audio itself.
-- A STUN server is configured. Some restrictive networks may require a TURN server later.
-- CAD integration does NOT need a new RADIO_API value; /dispatch is unchanged.
+CAD RADIO_API DOES NOT CHANGE:
+https://liberty-city-radio-relay.onrender.com/dispatch
+
+NOTE
+WebRTC remains peer-to-peer and currently uses public STUN. Very restrictive networks may
+need a TURN service later for reliable voice connectivity.
