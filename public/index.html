@@ -1,0 +1,37 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Liberty City FD Radio</title>
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+  <header>
+    <h1>LIBERTY CITY FIRE RADIO</h1>
+    <span id="conn">Connecting...</span>
+  </header>
+
+  <main>
+    <section class="panel">
+      <h2>Radio Console</h2>
+      <label>Unit / Callsign
+        <input id="unit" placeholder="Engine 1">
+      </label>
+      <button id="audio">Enable Radio Audio</button>
+      <button id="ptt" class="ptt">HOLD TO TALK</button>
+      <p class="note">PTT signaling is live. Browser microphone streaming can be added next.</p>
+    </section>
+
+    <section class="panel">
+      <h2>Dispatch Feed</h2>
+      <div id="feed"></div>
+    </section>
+  </main>
+
+  <div id="alert" class="alert hidden"></div>
+
+  <script src="/socket.io/socket.io.js"></script>
+  <script src="/app.js"></script>
+</body>
+</html>
