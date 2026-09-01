@@ -86,17 +86,54 @@ function tone(freq,start,dur,vol=.15,type="sine"){
   o.connect(g);g.connect(ctx.destination);o.start(t);o.stop(t+dur+.03);
 }
 
-function alertTone(){
-  tone(650,0,.7,.16);tone(950,0,.7,.12);
-  tone(790,.82,.85,.16);tone(1090,.82,.85,.12);
+// v5.3 radio audio: two-tone pager alert plus short radio key/squelch sounds.
+// These are synthesized in-browser so every web/desktop client receives them
+// automatically when this server is deployed.
+function noiseBurst(start,dur,vol=.025){
+  if(!audioOn || !ctx || ctx.state!=="running") return;
+  const length=Math.max(1,Math.floor(ctx.sampleRate*dur));
+  const buffer=ctx.createBuffer(1,length,ctx.sampleRate);
+  const data=buffer.getChannelData(0);
+  for(let i=0;i<length;i++){
+    const fade=1-(i/length);
+    data[i]=(Math.random()*2-1)*fade;
+  }
+  const source=ctx.createBufferSource();
+  const filter=ctx.createBiquadFilter();
+  const gain=ctx.createGain();
+  filter.type="bandpass";
+  filter.frequency.value=1750;
+  filter.Q.value=.7;
+  gain.gain.value=vol;
+  source.buffer=buffer;
+  source.connect(filter);filter.connect(gain);gain.connect(ctx.destination);
+  source.start(ctx.currentTime+start);
 }
-function keyUpTone(){ tone(1180,0,.07,.08,"square"); }
-function keyDownTone(){ tone(780,0,.07,.07,"square"); }
-function channelChangeTone(){ tone(880,0,.06,.05,"square"); }
+
+function alertTone(){
+  // Classic fire-pager style two-tone sequence.
+  tone(600,0,1.0,.16,"sine");
+  tone(900,1.06,1.0,.16,"sine");
+  tone(1050,2.18,.18,.10,"sine");
+}
+function keyUpTone(){
+  // Very short transmitter key chirp/click.
+  noiseBurst(0,.028,.035);
+  tone(1450,.008,.035,.035,"square");
+}
+function keyDownTone(){
+  // Squelch tail / mic release click.
+  noiseBurst(0,.075,.045);
+  tone(420,.012,.055,.025,"square");
+}
+function channelChangeTone(){
+  tone(900,0,.045,.04,"sine");
+  tone(1120,.055,.045,.035,"sine");
+}
 function emergencyTone(){
-  for(let i=0;i<5;i++){
-    tone(1050,i*.34,.14,.12,"square");
-    tone(760,i*.34+.16,.14,.12,"square");
+  for(let i=0;i<4;i++){
+    tone(1100,i*.42,.17,.13,"square");
+    tone(720,i*.42+.19,.17,.13,"square");
   }
 }
 
@@ -114,7 +151,7 @@ socket.on("dispatch", d => {
       speechSynthesis.cancel();
       const u = new SpeechSynthesisUtterance(`${d.units}. Respond to ${d.callType}, at ${d.address}.`);
       u.rate=.92;u.pitch=.95;speechSynthesis.speak(u);
-    },1900);
+    },2450);
   }
 });
 
