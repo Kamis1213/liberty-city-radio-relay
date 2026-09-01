@@ -1,13 +1,15 @@
-LIBERTY CITY RADIO RELAY v5.5 — REALISTIC RADIO AUDIO
+LIBERTY CITY RADIO RELAY v5.6 — REAL AUDIO
 
-Changes from v5.4:
-- Less fake/musical PTT sound
-- Short mechanical-style key-up click
-- Filtered RF/squelch crackle when a transmission opens
-- More natural repeater/squelch tail when a transmission ends
-- Station alert keeps the two-tone dispatch feel
-- Removed the cartoon-like rising attention chirps
-- Dispatch voice begins sooner after the two-tone alert
+The synthesized radio effects have been replaced with the user's selected MP3 files.
 
-This remains a server-side/client-web update, so the existing desktop radio
-does not need to be reinstalled after the Render service is updated.
+Included:
+- public/sounds/key-up.mp3
+- public/sounds/key-down.mp3
+- public/sounds/fire-tone.mp3
+
+Mappings:
+- Press PTT -> key-up.mp3
+- Release PTT -> key-down.mp3
+- Fire dispatch alert -> fire-tone.mp3
+
+No desktop-radio reinstall is required for these server/web audio changes.

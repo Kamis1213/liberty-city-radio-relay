@@ -86,6 +86,28 @@ function tone(freq,start,dur,vol=.15,type="sine"){
   o.connect(g);g.connect(ctx.destination);o.start(t);o.stop(t+dur+.03);
 }
 
+// v5.6 REAL AUDIO SAMPLES — user-selected MP3 files.
+const realRadioSounds = {
+  keyUp: new Audio("/sounds/key-up.mp3"),
+  keyDown: new Audio("/sounds/key-down.mp3"),
+  fireTone: new Audio("/sounds/fire-tone.mp3")
+};
+Object.values(realRadioSounds).forEach(a => { a.preload = "auto"; });
+
+function playRealRadioSound(name, volume=1){
+  if(!audioOn) return Promise.resolve();
+  const a = realRadioSounds[name];
+  if(!a) return Promise.resolve();
+  try {
+    a.pause();
+    a.currentTime = 0;
+    a.volume = Math.max(0, Math.min(1, volume));
+    return a.play().catch(()=>{});
+  } catch(e) {
+    return Promise.resolve();
+  }
+}
+
 // v5.5 radio audio: shorter, dirtier, less musical radio keying sounds.
 // Uses layered filtered noise + very short signaling tones so it feels closer
 // to a real portable/mobile radio instead of a clean computer beep.
@@ -125,26 +147,15 @@ function radioClick(start=0,vol=.055){
 }
 
 function alertTone(){
-  // Keep the repeating station-call feel the user liked, but remove the
-  // cartoonish rising chirps. Two clean pager tones + radio opening click.
-  radioClick(0,.045);
-  noiseBurst(.025,.045,.025,1550,.7,350);
-  tone(682.5,.10,1.05,.16,"sine");
-  tone(953.7,1.23,1.05,.16,"sine");
-  noiseBurst(2.32,.055,.025,1700,.7,400);
+  playRealRadioSound("fireTone", 0.9);
 }
 
 function keyUpTone(){
-  // Portable-radio key-up: contact click, tiny RF/squelch crackle, then open.
-  radioClick(0,.05);
-  noiseBurst(.012,.042,.032,1750,.55,450);
+  playRealRadioSound("keyUp", 0.95);
 }
 
 function keyDownTone(){
-  // Repeater/squelch tail: short static burst and low drop click.
-  noiseBurst(0,.095,.052,1450,.48,300);
-  tone(285,.070,.024,.025,"square");
-  radioClick(.088,.035);
+  playRealRadioSound("keyDown", 0.95);
 }
 
 function channelChangeTone(){
