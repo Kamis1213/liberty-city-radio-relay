@@ -86,24 +86,24 @@ function tone(freq,start,dur,vol=.15,type="sine"){
   o.connect(g);g.connect(ctx.destination);o.start(t);o.stop(t+dur+.03);
 }
 
-// v5.3 radio audio: two-tone pager alert plus short radio key/squelch sounds.
-// These are synthesized in-browser so every web/desktop client receives them
-// automatically when this server is deployed.
-function noiseBurst(start,dur,vol=.025){
+// v5.4 radio audio: stronger station-alert and radio-tail effects.
+// Still synthesized client-side so every browser/desktop client gets the change
+// automatically after this server deploys.
+function noiseBurst(start,dur,vol=.04,center=1800,q=.8){
   if(!audioOn || !ctx || ctx.state!=="running") return;
   const length=Math.max(1,Math.floor(ctx.sampleRate*dur));
   const buffer=ctx.createBuffer(1,length,ctx.sampleRate);
   const data=buffer.getChannelData(0);
   for(let i=0;i<length;i++){
-    const fade=1-(i/length);
+    const fade=Math.pow(1-(i/length),1.6);
     data[i]=(Math.random()*2-1)*fade;
   }
   const source=ctx.createBufferSource();
   const filter=ctx.createBiquadFilter();
   const gain=ctx.createGain();
   filter.type="bandpass";
-  filter.frequency.value=1750;
-  filter.Q.value=.7;
+  filter.frequency.value=center;
+  filter.Q.value=q;
   gain.gain.value=vol;
   source.buffer=buffer;
   source.connect(filter);filter.connect(gain);gain.connect(ctx.destination);
@@ -111,29 +111,38 @@ function noiseBurst(start,dur,vol=.025){
 }
 
 function alertTone(){
-  // Classic fire-pager style two-tone sequence.
-  tone(600,0,1.0,.16,"sine");
-  tone(900,1.06,1.0,.16,"sine");
-  tone(1050,2.18,.18,.10,"sine");
+  // Distinctive fire-station alert:
+  // rising attention chirps, followed by two long pager tones.
+  tone(880,0,.12,.11,"square");
+  tone(1040,.14,.12,.11,"square");
+  tone(1220,.28,.18,.12,"square");
+  tone(720,.58,1.15,.20,"sine");
+  tone(980,1.82,1.15,.20,"sine");
+  tone(1320,3.08,.20,.12,"square");
 }
+
 function keyUpTone(){
-  // Very short transmitter key chirp/click.
-  noiseBurst(0,.028,.035);
-  tone(1450,.008,.035,.035,"square");
+  // Positive transmitter key-up chirp.
+  noiseBurst(0,.022,.03,2200,1.2);
+  tone(1850,.006,.045,.055,"square");
+  tone(2250,.052,.035,.035,"square");
 }
+
 function keyDownTone(){
-  // Squelch tail / mic release click.
-  noiseBurst(0,.075,.045);
-  tone(420,.012,.055,.025,"square");
+  // Audible squelch-tail / repeater drop.
+  tone(520,0,.045,.045,"square");
+  noiseBurst(.025,.11,.06,1350,.55);
 }
+
 function channelChangeTone(){
-  tone(900,0,.045,.04,"sine");
-  tone(1120,.055,.045,.035,"sine");
+  tone(820,0,.04,.04,"sine");
+  tone(1120,.05,.05,.04,"sine");
 }
+
 function emergencyTone(){
-  for(let i=0;i<4;i++){
-    tone(1100,i*.42,.17,.13,"square");
-    tone(720,i*.42+.19,.17,.13,"square");
+  for(let i=0;i<6;i++){
+    tone(1320,i*.28,.10,.14,"square");
+    tone(680,i*.28+.12,.10,.14,"square");
   }
 }
 
@@ -151,7 +160,7 @@ socket.on("dispatch", d => {
       speechSynthesis.cancel();
       const u = new SpeechSynthesisUtterance(`${d.units}. Respond to ${d.callType}, at ${d.address}.`);
       u.rate=.92;u.pitch=.95;speechSynthesis.speak(u);
-    },2450);
+    },3450);
   }
 });
 
