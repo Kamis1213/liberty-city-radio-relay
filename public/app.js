@@ -86,52 +86,65 @@ function tone(freq,start,dur,vol=.15,type="sine"){
   o.connect(g);g.connect(ctx.destination);o.start(t);o.stop(t+dur+.03);
 }
 
-// v5.4 radio audio: stronger station-alert and radio-tail effects.
-// Still synthesized client-side so every browser/desktop client gets the change
-// automatically after this server deploys.
-function noiseBurst(start,dur,vol=.04,center=1800,q=.8){
+// v5.5 radio audio: shorter, dirtier, less musical radio keying sounds.
+// Uses layered filtered noise + very short signaling tones so it feels closer
+// to a real portable/mobile radio instead of a clean computer beep.
+function noiseBurst(start,dur,vol=.04,center=1800,q=.8,highpass=0){
   if(!audioOn || !ctx || ctx.state!=="running") return;
   const length=Math.max(1,Math.floor(ctx.sampleRate*dur));
   const buffer=ctx.createBuffer(1,length,ctx.sampleRate);
   const data=buffer.getChannelData(0);
   for(let i=0;i<length;i++){
-    const fade=Math.pow(1-(i/length),1.6);
-    data[i]=(Math.random()*2-1)*fade;
+    const x=i/length;
+    const attack=Math.min(1,x/.08);
+    const fade=Math.pow(1-x,1.15);
+    data[i]=(Math.random()*2-1)*attack*fade;
   }
   const source=ctx.createBufferSource();
-  const filter=ctx.createBiquadFilter();
+  const band=ctx.createBiquadFilter();
   const gain=ctx.createGain();
-  filter.type="bandpass";
-  filter.frequency.value=center;
-  filter.Q.value=q;
+  band.type="bandpass";
+  band.frequency.value=center;
+  band.Q.value=q;
   gain.gain.value=vol;
   source.buffer=buffer;
-  source.connect(filter);filter.connect(gain);gain.connect(ctx.destination);
+  source.connect(band);
+  if(highpass){
+    const hp=ctx.createBiquadFilter();
+    hp.type="highpass"; hp.frequency.value=highpass;
+    band.connect(hp); hp.connect(gain);
+  }else band.connect(gain);
+  gain.connect(ctx.destination);
   source.start(ctx.currentTime+start);
 }
 
+function radioClick(start=0,vol=.055){
+  // Mechanical/contact-like transient rather than a musical chirp.
+  noiseBurst(start,.018,vol,2350,.55,500);
+  tone(310,start+.002,.014,vol*.42,"square");
+}
+
 function alertTone(){
-  // Distinctive fire-station alert:
-  // rising attention chirps, followed by two long pager tones.
-  tone(880,0,.12,.11,"square");
-  tone(1040,.14,.12,.11,"square");
-  tone(1220,.28,.18,.12,"square");
-  tone(720,.58,1.15,.20,"sine");
-  tone(980,1.82,1.15,.20,"sine");
-  tone(1320,3.08,.20,.12,"square");
+  // Keep the repeating station-call feel the user liked, but remove the
+  // cartoonish rising chirps. Two clean pager tones + radio opening click.
+  radioClick(0,.045);
+  noiseBurst(.025,.045,.025,1550,.7,350);
+  tone(682.5,.10,1.05,.16,"sine");
+  tone(953.7,1.23,1.05,.16,"sine");
+  noiseBurst(2.32,.055,.025,1700,.7,400);
 }
 
 function keyUpTone(){
-  // Positive transmitter key-up chirp.
-  noiseBurst(0,.022,.03,2200,1.2);
-  tone(1850,.006,.045,.055,"square");
-  tone(2250,.052,.035,.035,"square");
+  // Portable-radio key-up: contact click, tiny RF/squelch crackle, then open.
+  radioClick(0,.05);
+  noiseBurst(.012,.042,.032,1750,.55,450);
 }
 
 function keyDownTone(){
-  // Audible squelch-tail / repeater drop.
-  tone(520,0,.045,.045,"square");
-  noiseBurst(.025,.11,.06,1350,.55);
+  // Repeater/squelch tail: short static burst and low drop click.
+  noiseBurst(0,.095,.052,1450,.48,300);
+  tone(285,.070,.024,.025,"square");
+  radioClick(.088,.035);
 }
 
 function channelChangeTone(){
@@ -160,7 +173,7 @@ socket.on("dispatch", d => {
       speechSynthesis.cancel();
       const u = new SpeechSynthesisUtterance(`${d.units}. Respond to ${d.callType}, at ${d.address}.`);
       u.rate=.92;u.pitch=.95;speechSynthesis.speak(u);
-    },3450);
+    },2450);
   }
 });
 
